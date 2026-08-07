@@ -8,9 +8,8 @@ This implementation was used to obtain experimental results that were reported i
 
 ### Implementation Notes
 
- - Programming language: **Java**
- - Software Prerequisites: JavaSE 1.4+
-   - the code was developed using JavaSE 1.4, so it does not use Java generics (introduced in JavaSE 5.0)
+ - Programming language: **Python 3** (standard library only, no third-party dependencies)
+   - the original **Java** implementation (JavaSE 1.4+) is kept in [`src/`](src/) for reference/provenance; [`python/`](python/) is a faithful, function-for-function port of it and is the actively maintained version
  - **3D models must be specified in specially-formatted VRML files** (see [below](#cad-models))
    - Face-vertex meshes with triangle and quad faces are supported
    - 16 sample models are included in this package
@@ -19,6 +18,34 @@ Package Contents
 ---------------------
 
 ### Source Code
+
+The Python implementation is located in the [`python/reeb_graph/`](python/reeb_graph/) package. There are **two** entry-point scripts, ported line-for-line from the original Java classes of the same names:
+
+1. [`extract_reeb_graph.py`](python/reeb_graph/extract_reeb_graph.py) (port of `ExtractReebGraph.java`) constructs MRGs for 3D models and saves them into text files.
+  - This procedure for MRG construction is described in Section 4 of [[1]](#references).
+  - **Usage** (run from the [`python/`](python/) directory, or with it on `PYTHONPATH`):  
+    `python3 -m reeb_graph.extract_reeb_graph`  `<num_pts>`  `<mu_coeff>`  `<mrg_size>`  `<model_1>.wrl`  `<model_2>.wrl` ... `<model_N>.wrl`  
+    **where:**
+      + `<num_pts>`   &ndash; target number of vertices prior to MRG construction (triangle faces are resampled to match `<num_pts>`)
+      + `<mu_coeff>`    &ndash; coefficient for calculating threshold parameter `r=sqrt(mu_coeff * area(S))`, which in turn is used to approximate values of function `mu` in [[1]](#references)
+      + `<mrg_size>`   &ndash; number of ranges in the finest resolution of MRG (parameter `K` in [[1]](#references))
+      + `<model_i>.wrl`   &ndash; i-th VRML model for `i=[1,N]` (MRG for each model is stored in `<model_i>.mrg`)
+2. [`compare_reeb_graph.py`](python/reeb_graph/compare_reeb_graph.py) (port of `CompareReebGraph.java`) implements the matching algorithm for a pairwise comparison of MRGs.
+  - The matching algorithm is described in Section 5 of [[1]](#references).
+  - **Usage:**  
+    `python3 -m reeb_graph.compare_reeb_graph`  `<num_pts>`  `<mu_coeff>`  `<mrg_size>`  `<sim_weight>`  `<model_1>.wrl` ... `<model_N>.wrl`  
+    **where:**
+      + `<num_pts>`   &ndash; target number of vertices prior to MRG construction (triangle faces are resampled to match `<num_pts>`)
+      + `<mu_coeff>`    &ndash; coefficient for calculating threshold parameter `r=sqrt(mu_coeff * area(S))`, which in turn is used to approximate values of function `mu` in [[1]](#references)
+      + `<mrg_size>`   &ndash; number of ranges in the finest resolution of MRG (parameter `K` in [[1]](#references))
+      + `<sim_weight>`   &ndash; weight `w` used in similarity function (trade-off between attributes `a` and `l` in [[1]](#references))
+      + `<model_i>.wrl`   &ndash; a list of VRML models to compare for `i=[1,N]` (it is assumed that each  model was processed using `extract_reeb_graph.py`, and MRG for `<model_i>.wrl` was stored in `<model_i>.mrg`)
+
+See [`python/README.md`](python/README.md) for more detail on the port (module map, and a note on the one source of run-to-run non-determinism inherited from the original Java code).
+
+The original Java sources remain in [`src/`](src/), documented below, and can still be built/run with a JDK if needed.
+
+#### Original Java Sources
 
 The source code is located in [`src/`](src/) directory. There are **two** main java classes:  
 
@@ -60,13 +87,11 @@ VRML parser in [`ExtractReebGraph`](src/ExtractReebGraph.java) can **only** hand
 Sample Usage
 ---------------------
 
-### Compiling
+### Python (recommended)
 
-```bash
-$ javac src/*.java
-```
+No build step, no third-party dependencies -- just Python 3.
 
-### MRG Construction
+#### MRG Construction
 
 3D models must be saved in a specially-formatted VRML files (see [CAD Models](#cad-models))
 
@@ -79,6 +104,55 @@ models/bracket_3.wrl
 models/fork_1.wrl
 models/fork_2.wrl
 ```
+
+Compute MRGs for all `*.wrl` files in a directory:
+
+```bash
+$ cd python
+$ ls ../models/*.wrl  | xargs  python3 -m reeb_graph.extract_reeb_graph   4000 0.0005 128
+```
+
+MRGs are saved into `*.mrg` files, right next to each `.wrl` model:
+
+```bash
+$ ls -1 ../models/*.mrg  | head -5
+
+../models/bracket_1.mrg
+../models/bracket_2.mrg
+../models/bracket_3.mrg
+../models/fork_1.mrg
+../models/fork_2.mrg
+```
+
+#### MRG Matching
+
+Compute pairwise similarity values for 3D models using their MRG representation:
+
+```bash
+$ ls ../models/*.wrl  | xargs  python3 -m reeb_graph.compare_reeb_graph   4000 0.0005 128 0.5
+```
+
+The similarity values are stored in a `log_<pts_num>_<mu_coef>_<mrg_size>_<sim_weight>` file, in the same format as the original Java program's output:
+
+```bash
+$ shuf log_4000_5.0E-4_128_0.5 | head -5
+
+Similarity between ../models/goodpart_2.wrl and ../models/fork_3.wrl is 0.7661396393161327
+Similarity between ../models/housing_1.wrl and ../models/socket_2.wrl is 0.6789623740585898
+Similarity between ../models/fork_3.wrl and ../models/bracket_2.wrl is 0.8125245864576977
+Similarity between ../models/goodpart_1.wrl and ../models/socket_2.wrl is 0.8162694461373452
+Similarity between ../models/bracket_3.wrl and ../models/housing_1.wrl is 0.6865232310951028
+```
+
+### Java (original, kept for reference)
+
+#### Compiling
+
+```bash
+$ javac src/*.java
+```
+
+#### MRG Construction
 
 Compute MRGs for all `*.wrl` files in a directory:
 
@@ -98,7 +172,7 @@ models/fork_1.mrg
 models/fork_2.mrg
 ```
 
-### MRG Matching
+#### MRG Matching
 
 Compute pairwise similarity values for 3D models using their MRG representation:
 
