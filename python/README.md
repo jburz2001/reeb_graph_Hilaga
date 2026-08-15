@@ -50,6 +50,16 @@ the Java version uses -- the two are cross-readable (a Python-built `.mrg`
 can be fed to the Java `CompareReebGraph`, and a Java-built `.mrg` can be
 fed to `compare_reeb_graph.py`); this was verified during porting.
 
+## Validating against Java yourself
+
+`../scripts/validate_parity.sh <num_pts> <mu_coeff> <mrg_size> <sim_weight> <model.wrl> [...]`
+compiles the Java sources, runs both implementations, and checks the one
+thing that's actually guaranteed to match: given the same `.mrg` input,
+`CompareReebGraph` and `compare_reeb_graph.py` must produce byte-identical
+similarity scores (it also prints the MRG structure from each side for
+comparison, but -- per the non-determinism note below -- a mismatch there
+is expected and not treated as a failure).
+
 ## Notable porting decisions
 
 - **`aman.java` mostly disappears.** It was a grab-bag of static helpers
@@ -84,12 +94,14 @@ fed to `compare_reeb_graph.py`); this was verified during porting.
   original.** `SparseMatrix.makeRandom` (`sparse_matrix.py`) shuffles the
   triangle list with `Math.random()` (`random.random()` here) before
   building point connectivity. This changes adjacency ordering, which
-  (via the Tset order-dependence above) perturbs the `a` attribute
-  slightly. **This is not a porting bug** -- running the original Java
-  `ExtractReebGraph` twice on the same input produces different `a`
-  values too (verified while validating this port). MRG *structure*
-  (node/edge counts per resolution) and the `l` attribute are unaffected
-  and reproduce exactly.
+  changes the order `Resample` visits edges, which can change
+  `points_length` and downstream MRG *structure* (node/edge counts per
+  resolution) in addition to perturbing the `a` attribute. **This is not
+  a porting bug** -- running the original Java `ExtractReebGraph` twice on
+  the same input produces different `points_length` and structure too
+  (verified while validating this port, see `scripts/validate_parity.sh`).
+  Do not expect a Java-built and Python-built `.mrg` for the same model to
+  line up node-for-node; that is only true by coincidence on small inputs.
 
 - **`CompareReebGraph`'s matching algorithm is fully deterministic** and
   was verified to reproduce Java's similarity scores bit-for-bit given the
