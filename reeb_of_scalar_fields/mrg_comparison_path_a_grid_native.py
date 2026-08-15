@@ -120,6 +120,7 @@ from reeb_graph.sparse_matrix import SparseMatrix
 from reeb_graph.triangle import Triangle
 
 FPO_PATH = Path(__file__).parent / "fundamental_periodic_orbits.h5"
+PITCHFORK10_PATH = Path(__file__).parent / "pitchfork_10_iterations.h5"
 OUTPUT_DIR = Path(__file__).parent / "results_path_a"
 
 # Original run() in exampleReebComparison_main.py used a 512x512 field with
@@ -152,6 +153,18 @@ def load_sherwood_fields(orbit_index: int, resize: int, roll_t: int, roll_x: int
     field_sherwood_rolled = np.roll(field_sherwood, shift=(roll_t, roll_x), axis=(0, 1))
 
     return field_sherwood, field_sherwood_rolled
+
+
+def load_clipped10_field(orbit_index: int, resize: int):
+    """Loads field_clipped10 the same way as the (commented-out) block in
+    exampleReebComparison_main.py's run() -- a genuinely different dataset
+    (pitchfork_10_iterations.h5, not a roll of fundamental_periodic_orbits.h5),
+    so comparing against it is a real dissimilarity check rather than a
+    roll-invariance check."""
+    orbits = orb.io.read_h5(str(PITCHFORK10_PATH))
+    orbit = orbits[orbit_index]
+    field_orbit = orbit.resize(resize, resize).transform(to="field")
+    return np.asarray(field_orbit.state, dtype=np.float64)
 
 
 def point_id(t_index: int, x_index: int, x_count: int) -> int:
@@ -339,6 +352,15 @@ def main():
     parser.add_argument("--sim-weight", type=float, default=0.5, help="w, trade-off between area and range attributes (default: 0.5)")
     parser.add_argument("--orbit-index", type=int, default=0, help="orbit index within the .h5 file (default: 0)")
     parser.add_argument(
+        "--against",
+        choices=("rolled", "clipped10"),
+        default="rolled",
+        help="what to compare field_sherwood against: 'rolled' (default) is field_sherwoodRolled, "
+        "a periodic roll of the same field -- a roll-invariance check, expect SIM close to self-similarity. "
+        "'clipped10' is field_clipped10, loaded from a genuinely different dataset "
+        "(pitchfork_10_iterations.h5) -- a real dissimilarity check, expect SIM to actually be lower.",
+    )
+    parser.add_argument(
         "--sanity-check",
         action="store_true",
         help="also build 'sherwood' a second, independent time and compare it to the first build, "
@@ -346,14 +368,19 @@ def main():
     )
     args = parser.parse_args()
 
-    roll_t = round(REFERENCE_ROLL_T * args.resize / REFERENCE_GRID) or 1
-    roll_x = round(REFERENCE_ROLL_X * args.resize / REFERENCE_GRID) or 1
-
-    print(f"Loading orbit {args.orbit_index}, resizing to {args.resize}x{args.resize}, "
-          f"roll=(t={roll_t}, x={roll_x})...")
-    field_sherwood, field_sherwood_rolled = load_sherwood_fields(
-        args.orbit_index, args.resize, roll_t, roll_x
-    )
+    print(f"Loading sherwood: orbit {args.orbit_index}, resized to {args.resize}x{args.resize}...")
+    if args.against == "rolled":
+        roll_t = round(REFERENCE_ROLL_T * args.resize / REFERENCE_GRID) or 1
+        roll_x = round(REFERENCE_ROLL_X * args.resize / REFERENCE_GRID) or 1
+        print(f"Loading sherwoodRolled: same field, roll=(t={roll_t}, x={roll_x})...")
+        field_sherwood, field_b = load_sherwood_fields(args.orbit_index, args.resize, roll_t, roll_x)
+        label_b, file_b = "sherwoodRolled", "field_sherwoodRolled"
+    else:
+        field_sherwood, _ = load_sherwood_fields(args.orbit_index, args.resize, 0, 0)
+        print(f"Loading clipped10: orbit {args.orbit_index} from {PITCHFORK10_PATH.name}, "
+              f"resized to {args.resize}x{args.resize}...")
+        field_b = load_clipped10_field(args.orbit_index, args.resize)
+        label_b, file_b = "clipped10", "field_clipped10"
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -361,9 +388,9 @@ def main():
     save_mrg("field_sherwood.wrl", MRG_a, reebs_a, attributes_a, finest_a)
     (Path("field_sherwood.mrg")).replace(OUTPUT_DIR / "field_sherwood.mrg")
 
-    MRG_b, reebs_b, attributes_b, finest_b = build_mrg(field_sherwood_rolled, args.mrg_size, "sherwoodRolled")
-    save_mrg("field_sherwoodRolled.wrl", MRG_b, reebs_b, attributes_b, finest_b)
-    (Path("field_sherwoodRolled.mrg")).replace(OUTPUT_DIR / "field_sherwoodRolled.mrg")
+    MRG_b, reebs_b, attributes_b, finest_b = build_mrg(field_b, args.mrg_size, label_b)
+    save_mrg(file_b + ".wrl", MRG_b, reebs_b, attributes_b, finest_b)
+    (Path(file_b + ".mrg")).replace(OUTPUT_DIR / (file_b + ".mrg"))
 
     sanity_sim = None
     if args.sanity_check:
@@ -376,15 +403,15 @@ def main():
     comparer.w = args.sim_weight
 
     sherwood_path = str(OUTPUT_DIR / "field_sherwood.wrl")
-    rolled_path = str(OUTPUT_DIR / "field_sherwoodRolled.wrl")
+    b_path = str(OUTPUT_DIR / (file_b + ".wrl"))
 
     comparer.main_one(sherwood_path, sherwood_path)
     sim_self_a = comparer.SIM_R_S
 
-    comparer.main_one(rolled_path, rolled_path)
+    comparer.main_one(b_path, b_path)
     sim_self_b = comparer.SIM_R_S
 
-    comparer.main_one(sherwood_path, rolled_path)
+    comparer.main_one(sherwood_path, b_path)
     sim_cross = comparer.SIM_R_S
 
     if args.sanity_check:
@@ -393,21 +420,25 @@ def main():
         sanity_sim = comparer.SIM_R_S
 
     print("\n=== Results ===")
-    print(f"SIM(sherwood, sherwood)             = {sim_self_a}")
-    print(f"SIM(sherwoodRolled, sherwoodRolled) = {sim_self_b}")
-    print(f"SIM(sherwood, sherwoodRolled)       = {sim_cross}")
+    print(f"SIM(sherwood, sherwood)         = {sim_self_a}")
+    print(f"SIM({label_b}, {label_b}) = {sim_self_b}")
+    print(f"SIM(sherwood, {label_b})       = {sim_cross}")
     ratio = sim_cross / ((sim_self_a + sim_self_b) / 2.0)
-    print(f"cross / average(self)               = {ratio}")
+    print(f"cross / average(self)           = {ratio}")
     if sanity_sim is not None:
         print(f"\nSIM(sherwood, sherwood REBUILT independently) = {sanity_sim}")
-        print("(this is the construction's own random-shuffle noise floor -- compare it to the")
-        print(" sherwood-vs-rolled ratio above: if the rolled gap is much bigger than this, it's")
-        print(" a real effect, not shuffle noise -- see the module docstring.)")
-    if ratio > 0.99:
-        print("\n=> Reeb graphs are (numerically) the same: the periodic roll did not change the MRG similarity.")
+        print("(this is the construction's own random-shuffle noise floor, for context.)")
+
+    if args.against == "rolled":
+        if ratio > 0.99:
+            print("\n=> Reeb graphs are (numerically) the same: the periodic roll did not change the MRG similarity.")
+        else:
+            print("\n=> Reeb graphs differ more than construction noise alone would explain -- see the module")
+            print("   docstring's \"IMPORTANT -- what similarity score to expect\" section for why.")
     else:
-        print("\n=> Reeb graphs differ more than construction noise alone would explain -- see the module")
-        print("   docstring's \"IMPORTANT -- what similarity score to expect\" section for why.")
+        print(f"\n=> sherwood vs {label_b} is a genuine dissimilarity check (different dataset, not a roll of")
+        print("   the same field) -- unlike the 'rolled' case, SIM well below self-similarity here is the")
+        print("   *expected*, correct result, not a bug to chase.")
 
 
 if __name__ == "__main__":
