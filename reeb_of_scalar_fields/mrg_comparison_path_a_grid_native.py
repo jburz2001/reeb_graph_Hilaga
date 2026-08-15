@@ -345,6 +345,75 @@ def build_mrg(field: np.ndarray, mrg_size: int, label: str):
     return MRG, reebs, attributes, mrg.FINEST_RESOLUTION
 
 
+def run_all(args):
+    """--against all: builds sherwood, sherwoodRolled, and clipped10, and
+    prints the full pairwise SIM table between all three (six comparisons:
+    three self-comparisons + three cross-comparisons), including
+    SIM(sherwoodRolled, clipped10), which the two-way --against modes
+    don't compute."""
+    roll_t = round(REFERENCE_ROLL_T * args.resize / REFERENCE_GRID) or 1
+    roll_x = round(REFERENCE_ROLL_X * args.resize / REFERENCE_GRID) or 1
+
+    print(f"Loading sherwood + sherwoodRolled: orbit {args.orbit_index}, resized to "
+          f"{args.resize}x{args.resize}, roll=(t={roll_t}, x={roll_x})...")
+    field_sherwood, field_rolled = load_sherwood_fields(args.orbit_index, args.resize, roll_t, roll_x)
+
+    print(f"Loading clipped10: orbit {args.orbit_index} from {PITCHFORK10_PATH.name}, "
+          f"resized to {args.resize}x{args.resize}...")
+    field_clipped10 = load_clipped10_field(args.orbit_index, args.resize)
+
+    fields = [
+        ("sherwood", "field_sherwood", field_sherwood),
+        ("sherwoodRolled", "field_sherwoodRolled", field_rolled),
+        ("clipped10", "field_clipped10", field_clipped10),
+    ]
+
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    paths = {}
+    for label, file_stem, field in fields:
+        MRG, reebs, attributes, finest = build_mrg(field, args.mrg_size, label)
+        save_mrg(file_stem + ".wrl", MRG, reebs, attributes, finest)
+        Path(file_stem + ".mrg").replace(OUTPUT_DIR / (file_stem + ".mrg"))
+        paths[label] = str(OUTPUT_DIR / (file_stem + ".wrl"))
+
+    print("\nComparing all pairs (CompareReebGraph, unmodified)...")
+    comparer = CompareReebGraph()
+    comparer.w = args.sim_weight
+
+    labels = [label for label, _, _ in fields]
+    sims = {}
+    for i, label_i in enumerate(labels):
+        for label_j in labels[i:]:
+            comparer.main_one(paths[label_i], paths[label_j])
+            sims[(label_i, label_j)] = comparer.SIM_R_S
+
+    print("\n=== Full pairwise SIM table ===")
+    col_width = max(len(l) for l in labels) + 2
+    header = " " * col_width + "".join(f"{l:>{col_width}}" for l in labels)
+    print(header)
+    for label_i in labels:
+        row = f"{label_i:<{col_width}}"
+        for label_j in labels:
+            key = (label_i, label_j) if (label_i, label_j) in sims else (label_j, label_i)
+            row += f"{sims[key]:>{col_width}.6f}"
+        print(row)
+
+    print("\n=== Key values ===")
+    print(f"SIM(sherwood, sherwood)                 = {sims[('sherwood', 'sherwood')]}")
+    print(f"SIM(sherwoodRolled, sherwoodRolled)      = {sims[('sherwoodRolled', 'sherwoodRolled')]}")
+    print(f"SIM(clipped10, clipped10)                = {sims[('clipped10', 'clipped10')]}")
+    print(f"SIM(sherwood, sherwoodRolled)            = {sims[('sherwood', 'sherwoodRolled')]}")
+    print(f"SIM(sherwood, clipped10)                 = {sims[('sherwood', 'clipped10')]}")
+    print(f"SIM(sherwoodRolled, clipped10)           = {sims[('sherwoodRolled', 'clipped10')]}")
+
+    print("\n=> sherwood and sherwoodRolled are the same field (up to a periodic shift), so they should")
+    print("   (and do) compare close to self-similarity. clipped10 is a genuinely different dataset, so")
+    print("   its comparisons against both sherwood and sherwoodRolled should land meaningfully lower --")
+    print("   and, since sherwoodRolled is just a relabeling of sherwood, SIM(sherwoodRolled, clipped10)")
+    print("   should be close to SIM(sherwood, clipped10), not some unrelated third value.")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--resize", type=int, default=32, help="grid resized to N x N (default: 32; see module docstring on performance)")
@@ -353,12 +422,14 @@ def main():
     parser.add_argument("--orbit-index", type=int, default=0, help="orbit index within the .h5 file (default: 0)")
     parser.add_argument(
         "--against",
-        choices=("rolled", "clipped10"),
+        choices=("rolled", "clipped10", "all"),
         default="rolled",
         help="what to compare field_sherwood against: 'rolled' (default) is field_sherwoodRolled, "
         "a periodic roll of the same field -- a roll-invariance check, expect SIM close to self-similarity. "
         "'clipped10' is field_clipped10, loaded from a genuinely different dataset "
-        "(pitchfork_10_iterations.h5) -- a real dissimilarity check, expect SIM to actually be lower.",
+        "(pitchfork_10_iterations.h5) -- a real dissimilarity check, expect SIM to actually be lower. "
+        "'all' builds sherwood, sherwoodRolled, AND clipped10, and prints the full pairwise SIM table "
+        "(including SIM(sherwoodRolled, clipped10), which the two-way modes don't compute).",
     )
     parser.add_argument(
         "--sanity-check",
@@ -367,6 +438,10 @@ def main():
         "to report the construction's own random-shuffle noise floor for context (see module docstring)",
     )
     args = parser.parse_args()
+
+    if args.against == "all":
+        run_all(args)
+        return
 
     print(f"Loading sherwood: orbit {args.orbit_index}, resized to {args.resize}x{args.resize}...")
     if args.against == "rolled":

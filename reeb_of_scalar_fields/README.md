@@ -20,6 +20,16 @@ directly as "mu" instead of Hilaga's geodesic-distance-based one.
 python3 mrg_comparison_path_a_grid_native.py --resize 64 --mrg-size 8 --sanity-check
 ```
 
+`--against` picks what `sherwood` is compared to: `rolled` (default, a
+periodic roll of the same field -- roll-invariance check), `clipped10`
+(field_clipped10 from `pitchfork_10_iterations.h5`, a genuinely different
+dataset -- real dissimilarity check), or `all` (builds all three and prints
+the full pairwise SIM table, e.g. to get `SIM(sherwoodRolled, clipped10)`):
+
+```bash
+python3 mrg_comparison_path_a_grid_native.py --against all --resize 64 --mrg-size 8
+```
+
 Only depends on `numpy`, `orbithunter`, and the dependency-free
 `python/reeb_graph` package -- no VTK/TTK needed.
 
