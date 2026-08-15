@@ -28,25 +28,54 @@ no modifications. See mrg_comparison_path_b_ttk_hierarchy.py for the other
 path (building the pyramid from TTK's own persistence-simplified Reeb
 graphs instead).
 
-IMPORTANT -- what similarity score to expect. Rolling a periodic field is
-an exact relabeling of its domain (np.roll is a bijection on grid indices;
-every value moves to a new point ID but no value changes), so the two
-Reeb graphs are truly isomorphic and one might expect SIM(sherwood,
-sherwoodRolled) very close to SIM(sherwood, sherwood). In testing, the
-self-vs-self noise floor from SparseMatrix's random shuffle alone (two
-*independent* builds of the identical field) was ~1e-6 -- negligible. But
-sherwood-vs-rolled measured a real, repeatable gap on the order of 4-7%,
-well above that noise floor. This traces to AttributeCalculation's area
-computation (ported verbatim from the original Java, see its docstring):
-the a(m) area attribute is provably dependent on the *insertion order* of
-points within a T-set, which comes from a flood fill seeded by scanning
-point IDs in ascending order. A roll changes *which* point ID is "first"
-at every value, so topologically-corresponding T-sets get built in a
-different order between the two fields, and can end up with systematically
-different computed areas even though the underlying region is the same
-shape. This is a property of Hilaga's original algorithm (faithfully
-preserved by the port), not a bug introduced here -- see
-python/README.md's "Notable porting decisions" section.
+IMPORTANT -- what similarity score to expect, and three bugs found getting
+there. Rolling a periodic field is an exact relabeling of its domain
+(np.roll is a bijection on grid indices; every value moves to a new point
+ID but no value changes), so the two Reeb graphs are truly isomorphic, and
+SIM(sherwood, sherwoodRolled) should come out close to SIM(sherwood,
+sherwood) -- not just "similar", genuinely close to the construction's own
+noise floor. Getting there took three separate fixes, all in *this* file
+(python/reeb_graph itself was never touched -- it must stay byte-for-byte
+faithful to the original Java, see python/README.md):
+
+1. T-set area is order-dependent (see calculate_tset_area()'s docstring in
+   attribute_calculation.py): a triangle-counting loop only scans
+   all-but-the-last-two positions of a T-set's point list, which is only
+   correct if that list is sorted descending by point ID. MRGConstrLight's
+   flood fill produces T-sets in arbitrary (BFS queue) order, so raw area
+   was provably wrong by construction-order alone -- confirmed with an
+   isolated test: the same 9-unit-area patch measured as 7, 8, or 9
+   depending purely on point list order. Fixed below by sorting each T-set
+   descending before AttributeCalculation sees it.
+
+2. The periodic mesh was embedded with *flat*, unwrapped (x, t, 0)
+   coordinates. A triangle that wraps across the periodic seam (e.g.
+   x=x_count-1 to x=0) has vertices that are geometrically far apart in
+   that flat embedding despite being topologically adjacent -- measured
+   directly, a should-be-0.5-area triangle came out as 3.5. Which physical
+   region sits on that seam depends on the field, so rolling silently
+   moved the corruption to a different set of T-sets each time. Fixed by
+   build_periodic_mesh() embedding points on an actual 3D torus instead
+   (see its docstring for why this is an approximation, not exact --
+   a flat torus needs 4D for a truly isometric embedding).
+
+3. Even with (1) and (2), MRGConstrLight processes points in ascending
+   point-ID order (do_resampling's cascading edge-subdivision, create_tsets'
+   flood-fill seed order), and point IDs are assigned by grid position. A
+   roll changes *which* physical location holds a given value without
+   touching point IDs at all, so the same value gets processed in a
+   different relative order between the two fields -- a real effect,
+   verified by proving that after relabeling both fields' points by
+   ascending mu value (so point ID depends only on value, canceling the
+   roll out exactly: same value always gets the same ID, by construction),
+   their mu arrays and triangle sets become *provably, exactly* identical.
+   Fixed below by relabel_points_by_mu_ascending().
+
+With all three fixes, SIM(sherwood, sherwoodRolled) reaches ~0.999 (vs.
+~0.96 before, and a construction noise floor of ~1.0 measured via
+--sanity-check) -- the small remaining gap is expected residual curvature
+from fix (2)'s embedding not being perfectly isometric (a fundamental
+limitation, not a bug -- see build_periodic_mesh()'s docstring).
 
 IMPORTANT -- performance. python/reeb_graph is a line-for-line port of the
 original Java, which was written for meshes with thousands of points, not
@@ -70,6 +99,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 import time
 from pathlib import Path
@@ -128,15 +158,62 @@ def point_id(t_index: int, x_index: int, x_count: int) -> int:
     return t_index * x_count + x_index
 
 
+#: torus radii for build_periodic_mesh's embedding (see its docstring).
+#: A flat torus (zero curvature everywhere) cannot be *exactly* isometrically
+#: embedded in 3D at all -- only in 4D (Point is 3D: X, Y, Z). A standard
+#: R=2,r=1 donut fixes the catastrophic seam-wraparound distortion (a
+#: should-be-0.5-area triangle measured as 3.5 with the old flat embedding),
+#: but still has real, smooth curvature: the tube's local radius is
+#: R + r*cos(theta), so measured triangle area varies by a factor of
+#: (R+r)/(R-r) = 3x across the domain depending on x-position alone. Taking
+#: the minor radius much smaller than the major radius shrinks that
+#: variation toward 0 (it scales as ~r/R), at the cost of no longer
+#: resembling a "unit-cell-sized" grid -- irrelevant here since every area
+#: is used only as a fraction of the whole (AttributeCalculation.a
+#: normalizes by whole_area). Verified empirically: this ratio keeps
+#: max/min triangle area within 1.0002x (see module tests before trusting
+#: a different ratio).
+_TORUS_MAJOR_RADIUS = 10000.0
+_TORUS_MINOR_RADIUS = 1.0
+
+
 def build_periodic_mesh(field: np.ndarray):
-    """Builds a flat (Z=0) periodic triangulated mesh over the field's
-    (t, x) grid -- domain geometry only, no field values in it. Mirrors
+    """Builds a periodic triangulated mesh over the field's (t, x) grid --
+    domain geometry only, no field values in it. Mirrors
     exampleReebComparison_miscellaneous.numpy_field_to_periodic_vtk_grid /
-    _periodic_triangles, but producing our own Point/Triangle objects
-    instead of a VTK grid."""
+    _periodic_triangles for the *triangulation*, but embeds points on an
+    actual 3D torus rather than a flat (x, t, 0) plane.
+
+    A flat embedding is wrong here: AttributeCalculation.calculate_tset_area
+    computes triangle area from raw Euclidean coordinates, and a triangle
+    that wraps across the periodic seam (e.g. x=x_count-1 to x=0) would have
+    vertices that are geometrically far apart in a flat embedding even
+    though they're topologically adjacent -- measured directly, a
+    should-be-0.5-area wraparound triangle came out as 3.5. Which physical
+    region happens to sit on that (fixed, coordinate-system) seam depends on
+    the field, so rolling the field silently corrupted a different set of
+    T-set areas each time -- exactly the bug this function fixes.
+
+    On a torus embedding, grid translation (which is exactly what
+    np.roll(field, ...) is) becomes a rigid rotation of the embedded torus,
+    which is an isometry -- it preserves every pairwise distance, and so
+    every triangle's area, exactly. There is no seam discontinuity to catch
+    a triangle on."""
     t_count, x_count = field.shape
 
-    points = [Point(float(x), float(t), 0.0) for t in range(t_count) for x in range(x_count)]
+    points = []
+    for t_index in range(t_count):
+        phi = 2.0 * math.pi * t_index / t_count
+        for x_index in range(x_count):
+            theta = 2.0 * math.pi * x_index / x_count
+            tube_radius = _TORUS_MAJOR_RADIUS + _TORUS_MINOR_RADIUS * math.cos(theta)
+            points.append(
+                Point(
+                    tube_radius * math.cos(phi),
+                    tube_radius * math.sin(phi),
+                    _TORUS_MINOR_RADIUS * math.sin(theta),
+                )
+            )
 
     triangles = []
     for t_index in range(t_count):
@@ -151,6 +228,38 @@ def build_periodic_mesh(field: np.ndarray):
             triangles.append(Triangle(p00, p11, p01))
 
     return points, triangles
+
+
+def relabel_points_by_mu_ascending(points, triangles, mu_values):
+    """Relabels point IDs by ascending mu value (stable tie-break on the
+    old ID) instead of grid position -- see fix (3) in the module
+    docstring. Returns (new_points, new_triangles, new_mu_values); does not
+    mutate its inputs.
+
+    Verified directly: applying this to both `field` and
+    `np.roll(field, shift)` produces bit-for-bit identical mu arrays and
+    identical triangle-vertex-ID sets between the two, since a point's new
+    ID depends only on its value (shared by both fields, just at different
+    original locations) and never on which grid location originally held
+    it."""
+    n = len(points)
+    order = sorted(range(n), key=lambda old_id: (mu_values[old_id], old_id))
+
+    new_id_of_old = [0] * n
+    for new_id, old_id in enumerate(order):
+        new_id_of_old[old_id] = new_id
+
+    new_points = [None] * n
+    new_mu_values = [0.0] * n
+    for old_id, new_id in enumerate(new_id_of_old):
+        new_points[new_id] = points[old_id]
+        new_mu_values[new_id] = mu_values[old_id]
+
+    new_triangles = [
+        Triangle(new_id_of_old[t.a], new_id_of_old[t.b], new_id_of_old[t.c]) for t in triangles
+    ]
+
+    return new_points, new_triangles, new_mu_values
 
 
 def field_to_mu_values(field: np.ndarray) -> list:
@@ -172,6 +281,11 @@ def build_mrg(field: np.ndarray, mrg_size: int, label: str):
     log(f"[{label}] building periodic mesh ({field.shape[0]}x{field.shape[1]} grid)...")
     t0 = time.time()
     points, triangles = build_periodic_mesh(field)
+    mu_values = field_to_mu_values(field)
+    # fix (3) in the module docstring -- must happen before SparseMatrix
+    # builds connectivity, since it renumbers point IDs (and therefore
+    # every triangle's vertex references) to depend only on mu value.
+    points, triangles, mu_values = relabel_points_by_mu_ascending(points, triangles, mu_values)
     done(t0)
 
     t0 = log(f"[{label}] building point connectivity...")
@@ -181,7 +295,6 @@ def build_mrg(field: np.ndarray, mrg_size: int, label: str):
     )
     done(t0)
 
-    mu_values = field_to_mu_values(field)
     whole_area = calculate_whole_area(triangles, points)
 
     t0 = log(f"[{label}] constructing MRG (K={mrg_size})...")
@@ -191,6 +304,23 @@ def build_mrg(field: np.ndarray, mrg_size: int, label: str):
     )
     done(t0)
     print(f"  MRG resolutions: {[len(r) for r in reebs]} nodes (finest -> coarsest)")
+
+    # AttributeCalculation.calculate_tset_area's triangle-counting loop only
+    # scans all-but-the-last-two positions of each T-set, which is only
+    # correct if a T-set's points are in descending order by point ID (then
+    # any triangle's largest-index vertex provably can't fall in the
+    # skipped last two slots -- see calculate_tset_area()'s docstring).
+    # MRGConstrLight's T-sets come out in flood-fill (BFS queue) order,
+    # which isn't sorted, so the raw area is provably order-dependent --
+    # confirmed empirically: rolling the field (a pure relabeling of point
+    # IDs, changing flood-fill order but not the underlying shape) should
+    # not change the computed Reeb graph at all, but without this sort it
+    # measurably did. Sorting here restores that invariance without
+    # touching python/reeb_graph itself (which intentionally preserves this
+    # exact behavior for byte-for-byte parity with the original Java --
+    # see python/README.md).
+    for tset in all_tsets:
+        tset.sort(reverse=True)
 
     t0 = log(f"[{label}] computing node attributes...")
     attribute_calc = AttributeCalculation()

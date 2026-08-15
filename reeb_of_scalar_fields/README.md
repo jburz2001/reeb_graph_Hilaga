@@ -21,13 +21,23 @@ python3 mrg_comparison_path_a_grid_native.py --resize 64 --mrg-size 8 --sanity-c
 ```
 
 Only depends on `numpy`, `orbithunter`, and the dependency-free
-`python/reeb_graph` package -- no VTK/TTK needed. See the module docstring
-for the two important caveats found while building this: (1) it only scales
-to a downsampled grid, not the full 512x512 field (pure-Python
-`MRGConstrLight` is not linear in point count); (2) the measured
-sherwood-vs-rolled similarity is genuinely below 1.0 by more than
-construction noise alone would explain, traced to an order-of-construction
-quirk in the original algorithm's area computation, not a bug in the port.
+`python/reeb_graph` package -- no VTK/TTK needed.
+
+`SIM(sherwood, sherwoodRolled)` now lands within `~0.0001-0.02%` of
+`SIM(sherwood, sherwood)` (verified at multiple grid sizes) -- close to the
+construction's own random-shuffle noise floor. Getting there took three
+separate bug fixes, all contained in this file (`python/reeb_graph` itself
+was never touched, and must stay byte-for-byte faithful to the original
+Java -- see `../python/README.md`): an order-dependent triangle-area
+computation that needed T-sets pre-sorted; a flat (unwrapped) coordinate
+embedding that badly distorted the area of triangles crossing the periodic
+seam, fixed by embedding the grid on an actual 3D torus instead; and
+MRGConstrLight's construction being sensitive to point-ID processing order
+in a way a roll disturbs (since IDs are tied to grid position, not value),
+fixed by relabeling points by ascending mu value before construction. See
+the module docstring's "IMPORTANT" section for the full writeup of each.
+Also still true: it only scales to a downsampled grid, not the full
+512x512 field (pure-Python `MRGConstrLight` is not linear in point count).
 
 ## Path B -- `mrg_comparison_path_b_ttk_hierarchy.py`
 
