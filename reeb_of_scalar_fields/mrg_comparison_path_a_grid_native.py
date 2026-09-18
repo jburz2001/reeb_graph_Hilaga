@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Path A (of the two paths discussed for adapting the Hilaga MRG codebase to
 scalar-field Reeb graphs): rebuild the MRG pyramid directly from the scalar
-field on its own periodic grid, reusing python/reeb_graph UNCHANGED.
+field on its own periodic grid, reusing python/dolphin_comparison UNCHANGED.
 
 This bypasses TTK's Reeb graph computation entirely. Hilaga's own machinery
 (MRGConstrLight's uniform mu-range binning + multiresolution merge,
@@ -23,7 +23,7 @@ just substituting:
                                        care which)
 
 Everything downstream (MRGConstrLight, AttributeCalculation, mrg_io,
-CompareReebGraph) is the exact, already-validated python/reeb_graph code --
+CompareReebGraph) is the exact, already-validated python/dolphin_comparison code --
 no modifications. See mrg_comparison_path_b_ttk_hierarchy.py for the other
 path (building the pyramid from TTK's own persistence-simplified Reeb
 graphs instead).
@@ -35,7 +35,7 @@ ID but no value changes), so the two Reeb graphs are truly isomorphic, and
 SIM(sherwood, sherwoodRolled) should come out close to SIM(sherwood,
 sherwood) -- not just "similar", genuinely close to the construction's own
 noise floor. Getting there took three separate fixes, all in *this* file
-(python/reeb_graph itself was never touched -- it must stay byte-for-byte
+(python/dolphin_comparison itself was never touched -- it must stay byte-for-byte
 faithful to the original Java, see python/README.md):
 
 1. T-set area is order-dependent (see calculate_tset_area()'s docstring in
@@ -77,7 +77,7 @@ With all three fixes, SIM(sherwood, sherwoodRolled) reaches ~0.999 (vs.
 from fix (2)'s embedding not being perfectly isometric (a fundamental
 limitation, not a bug -- see build_periodic_mesh()'s docstring).
 
-IMPORTANT -- performance. python/reeb_graph is a line-for-line port of the
+IMPORTANT -- performance. python/dolphin_comparison is a line-for-line port of the
 original Java, which was written for meshes with thousands of points, not
 hundreds of thousands. MRGConstrLight's construction is *not* linear in
 point count (`unify_two_ranges` restarts its scan on every merge; T-set
@@ -109,15 +109,15 @@ import orbithunter as orb
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "python"))
 
-from reeb_graph.attribute_calculation import AttributeCalculation
-from reeb_graph.compare_reeb_graph import CompareReebGraph
-from reeb_graph.extract_reeb_graph import calculate_whole_area
-from reeb_graph.mrg_constr_light import MRGConstrLight
-from reeb_graph.mrg_io import save_mrg
-from reeb_graph.mu_normalization import MuNormalization
-from reeb_graph.point import Point
-from reeb_graph.sparse_matrix import SparseMatrix
-from reeb_graph.triangle import Triangle
+from dolphin_comparison.attribute_calculation import AttributeCalculation
+from dolphin_comparison.compare_reeb_graph import CompareReebGraph
+from dolphin_comparison.extract_reeb_graph import calculate_whole_area
+from dolphin_comparison.mrg_constr_light import MRGConstrLight
+from dolphin_comparison.mrg_io import save_mrg
+from dolphin_comparison.mu_normalization import MuNormalization
+from dolphin_comparison.point import Point
+from dolphin_comparison.sparse_matrix import SparseMatrix
+from dolphin_comparison.triangle import Triangle
 
 FPO_PATH = Path(__file__).parent / "fundamental_periodic_orbits.h5"
 PITCHFORK10_PATH = Path(__file__).parent / "pitchfork_10_iterations.h5"
@@ -329,7 +329,7 @@ def build_mrg(field: np.ndarray, mrg_size: int, label: str):
     # IDs, changing flood-fill order but not the underlying shape) should
     # not change the computed Reeb graph at all, but without this sort it
     # measurably did. Sorting here restores that invariance without
-    # touching python/reeb_graph itself (which intentionally preserves this
+    # touching python/dolphin_comparison itself (which intentionally preserves this
     # exact behavior for byte-for-byte parity with the original Java --
     # see python/README.md).
     for tset in all_tsets:

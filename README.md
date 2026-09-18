@@ -19,21 +19,21 @@ Package Contents
 
 ### Source Code
 
-The Python implementation is located in the [`python/reeb_graph/`](python/reeb_graph/) package. There are **two** entry-point scripts, ported line-for-line from the original Java classes of the same names:
+The Python implementation is located in the [`python/dolphin_comparison/`](python/dolphin_comparison/) package. There are **two** entry-point scripts, ported line-for-line from the original Java classes of the same names:
 
-1. [`extract_reeb_graph.py`](python/reeb_graph/extract_reeb_graph.py) (port of `ExtractReebGraph.java`) constructs MRGs for 3D models and saves them into text files.
+1. [`extract_reeb_graph.py`](python/dolphin_comparison/extract_reeb_graph.py) (port of `ExtractReebGraph.java`) constructs MRGs for 3D models and saves them into text files.
   - This procedure for MRG construction is described in Section 4 of [[1]](#references).
   - **Usage** (run from the [`python/`](python/) directory, or with it on `PYTHONPATH`):  
-    `python3 -m reeb_graph.extract_reeb_graph`  `<num_pts>`  `<mu_coeff>`  `<mrg_size>`  `<model_1>.wrl`  `<model_2>.wrl` ... `<model_N>.wrl`  
+    `python3 -m dolphin_comparison.extract_reeb_graph`  `<num_pts>`  `<mu_coeff>`  `<mrg_size>`  `<model_1>.wrl`  `<model_2>.wrl` ... `<model_N>.wrl`  
     **where:**
       + `<num_pts>`   &ndash; target number of vertices prior to MRG construction (triangle faces are resampled to match `<num_pts>`)
       + `<mu_coeff>`    &ndash; coefficient for calculating threshold parameter `r=sqrt(mu_coeff * area(S))`, which in turn is used to approximate values of function `mu` in [[1]](#references)
       + `<mrg_size>`   &ndash; number of ranges in the finest resolution of MRG (parameter `K` in [[1]](#references))
       + `<model_i>.wrl`   &ndash; i-th VRML model for `i=[1,N]` (MRG for each model is stored in `<model_i>.mrg`)
-2. [`compare_reeb_graph.py`](python/reeb_graph/compare_reeb_graph.py) (port of `CompareReebGraph.java`) implements the matching algorithm for a pairwise comparison of MRGs.
+2. [`compare_reeb_graph.py`](python/dolphin_comparison/compare_reeb_graph.py) (port of `CompareReebGraph.java`) implements the matching algorithm for a pairwise comparison of MRGs.
   - The matching algorithm is described in Section 5 of [[1]](#references).
   - **Usage:**  
-    `python3 -m reeb_graph.compare_reeb_graph`  `<num_pts>`  `<mu_coeff>`  `<mrg_size>`  `<sim_weight>`  `<model_1>.wrl` ... `<model_N>.wrl`  
+    `python3 -m dolphin_comparison.compare_reeb_graph`  `<num_pts>`  `<mu_coeff>`  `<mrg_size>`  `<sim_weight>`  `<model_1>.wrl` ... `<model_N>.wrl`  
     **where:**
       + `<num_pts>`   &ndash; target number of vertices prior to MRG construction (triangle faces are resampled to match `<num_pts>`)
       + `<mu_coeff>`    &ndash; coefficient for calculating threshold parameter `r=sqrt(mu_coeff * area(S))`, which in turn is used to approximate values of function `mu` in [[1]](#references)
@@ -109,7 +109,7 @@ Compute MRGs for all `*.wrl` files in a directory:
 
 ```bash
 $ cd python
-$ ls ../models/*.wrl  | xargs  python3 -m reeb_graph.extract_reeb_graph   4000 0.0005 128
+$ ls ../models/*.wrl  | xargs  python3 -m dolphin_comparison.extract_reeb_graph   4000 0.0005 128
 ```
 
 MRGs are saved into `*.mrg` files, right next to each `.wrl` model:
@@ -129,7 +129,7 @@ $ ls -1 ../models/*.mrg  | head -5
 Compute pairwise similarity values for 3D models using their MRG representation:
 
 ```bash
-$ ls ../models/*.wrl  | xargs  python3 -m reeb_graph.compare_reeb_graph   4000 0.0005 128 0.5
+$ ls ../models/*.wrl  | xargs  python3 -m dolphin_comparison.compare_reeb_graph   4000 0.0005 128 0.5
 ```
 
 The similarity values are stored in a `log_<pts_num>_<mu_coef>_<mrg_size>_<sim_weight>` file, in the same format as the original Java program's output:

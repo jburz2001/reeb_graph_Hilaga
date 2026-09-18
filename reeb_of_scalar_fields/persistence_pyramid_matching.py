@@ -2,7 +2,7 @@
 for the full picture and design rationale).
 
 Everything in this file operates purely on RNode/AttributeElement objects
-(from python/reeb_graph) via plain attributes (`.attribute.a`, `.attribute.l`,
+(from python/dolphin_comparison) via plain attributes (`.attribute.a`, `.attribute.l`,
 `.children`, `.parent`) -- no VTK or TTK import, so it can be exercised with
 synthetic data and unit-tested without either installed. Only the pyramid
 *construction* (mrg_comparison_path_b_ttk_hierarchy.py's
@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "python"))
 
-from reeb_graph.rnode import RNode  # noqa: E402
+from dolphin_comparison.rnode import RNode  # noqa: E402
 
 
 def sim(m: RNode, n: RNode, w: float) -> float:

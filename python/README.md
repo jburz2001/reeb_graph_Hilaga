@@ -41,8 +41,8 @@ No dependencies beyond the Python 3 standard library.
 
 ```bash
 cd python
-python3 -m reeb_graph.extract_reeb_graph 4000 0.0005 128 ../models/*.wrl
-python3 -m reeb_graph.compare_reeb_graph 4000 0.0005 128 0.5 ../models/*.wrl
+python3 -m dolphin_comparison.extract_reeb_graph 4000 0.0005 128 ../models/*.wrl
+python3 -m dolphin_comparison.compare_reeb_graph 4000 0.0005 128 0.5 ../models/*.wrl
 ```
 
 `.mrg` files are written next to each `.wrl` model, in the same text format

@@ -2,7 +2,7 @@
 
 Two implementations of comparing `field_sherwood` and `field_sherwoodRolled`
 (defined in `exampleReebComparison_main.py`'s `run()`) using the Hilaga
-et al. MRG codebase in [`../python/reeb_graph`](../python/reeb_graph),
+et al. MRG codebase in [`../python/dolphin_comparison`](../python/dolphin_comparison),
 instead of the `networkx` isomorphism/WL-hash check `exampleReebComparison_main.py`
 already does. Both compute `SIM(sherwood, sherwood)`, `SIM(sherwoodRolled,
 sherwoodRolled)`, and `SIM(sherwood, sherwoodRolled)` and print the ratio of
@@ -12,7 +12,7 @@ the last to the average of the first two.
 
 **Fully implemented, run, and validated** against the real data. Rebuilds
 the MRG pyramid directly from the field on its own periodic grid, reusing
-`python/reeb_graph` completely unchanged -- Hilaga's own uniform mu-range
+`python/dolphin_comparison` completely unchanged -- Hilaga's own uniform mu-range
 binning stands in for a Reeb graph computation, using the field's values
 directly as "mu" instead of Hilaga's geodesic-distance-based one.
 
@@ -31,12 +31,12 @@ python3 mrg_comparison_path_a_grid_native.py --against all --resize 64 --mrg-siz
 ```
 
 Only depends on `numpy`, `orbithunter`, and the dependency-free
-`python/reeb_graph` package -- no VTK/TTK needed.
+`python/dolphin_comparison` package -- no VTK/TTK needed.
 
 `SIM(sherwood, sherwoodRolled)` now lands within `~0.0001-0.02%` of
 `SIM(sherwood, sherwood)` (verified at multiple grid sizes) -- close to the
 construction's own random-shuffle noise floor. Getting there took three
-separate bug fixes, all contained in this file (`python/reeb_graph` itself
+separate bug fixes, all contained in this file (`python/dolphin_comparison` itself
 was never touched, and must stay byte-for-byte faithful to the original
 Java -- see `../python/README.md`): an order-dependent triangle-area
 computation that needed T-sets pre-sorted; a flat (unwrapped) coordinate

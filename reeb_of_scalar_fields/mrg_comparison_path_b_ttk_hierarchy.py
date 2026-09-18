@@ -42,7 +42,7 @@ Overview
    machinery, which exists specifically to handle that ambiguity and
    therefore isn't needed here).
 3. Node attributes a(m) (area) and l(m) (scalar range) are computed with
-   the *same* triangle-area machinery python/reeb_graph already uses
+   the *same* triangle-area machinery python/dolphin_comparison already uses
    (AttributeCalculation.calculate_tset_area), applied to the T-set each
    arc's segmentation defines, on the same periodic mesh Path A builds --
    normalized the same way Hilaga's does: divided by the number of
@@ -102,10 +102,10 @@ from exampleReebComparison_main import (  # noqa: E402  (needs sys.path set firs
     simplify_field_by_persistence,
 )
 
-from reeb_graph.attribute_element import AttributeElement  # noqa: E402
-from reeb_graph.extract_reeb_graph import calculate_whole_area  # noqa: E402
-from reeb_graph.rnode import RNode  # noqa: E402
-from reeb_graph.sparse_matrix import SparseMatrix  # noqa: E402
+from dolphin_comparison.attribute_element import AttributeElement  # noqa: E402
+from dolphin_comparison.extract_reeb_graph import calculate_whole_area  # noqa: E402
+from dolphin_comparison.rnode import RNode  # noqa: E402
+from dolphin_comparison.sparse_matrix import SparseMatrix  # noqa: E402
 
 from mrg_comparison_path_a_grid_native import (  # noqa: E402
     REFERENCE_GRID,

@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "python"))
 
-from reeb_graph.attribute_calculation import AttributeCalculation  # noqa: E402
+from dolphin_comparison.attribute_calculation import AttributeCalculation  # noqa: E402
 
 SCALAR_NAME = "u"
 

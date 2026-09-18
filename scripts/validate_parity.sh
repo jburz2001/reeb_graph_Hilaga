@@ -56,7 +56,7 @@ echo "==> Extracting with Java..."
 ( cd "$JAVA_RUN_DIR" && java -cp "$JAVA_BUILD_DIR" ExtractReebGraph "$NUM_PTS" "$MU_COEFF" "$MRG_SIZE" "${MODEL_NAMES[@]}" )
 
 echo "==> Extracting with Python..."
-( cd "$PYTHON_RUN_DIR" && PYTHONPATH="$REPO_ROOT/python" python3 -m reeb_graph.extract_reeb_graph "$NUM_PTS" "$MU_COEFF" "$MRG_SIZE" "${MODEL_NAMES[@]}" )
+( cd "$PYTHON_RUN_DIR" && PYTHONPATH="$REPO_ROOT/python" python3 -m dolphin_comparison.extract_reeb_graph "$NUM_PTS" "$MU_COEFF" "$MRG_SIZE" "${MODEL_NAMES[@]}" )
 
 echo ""
 echo "==> Tier 1 (informational only -- NOT a pass/fail check): comparing MRG structure..."
@@ -87,7 +87,7 @@ for name in "${MODEL_NAMES[@]}"; do
 done
 
 ( cd "$COMPARE_JAVA_DIR" && java -cp "$JAVA_BUILD_DIR" CompareReebGraph "$NUM_PTS" "$MU_COEFF" "$MRG_SIZE" "$SIM_WEIGHT" "${MODEL_NAMES[@]}" )
-( cd "$COMPARE_PYTHON_DIR" && PYTHONPATH="$REPO_ROOT/python" python3 -m reeb_graph.compare_reeb_graph "$NUM_PTS" "$MU_COEFF" "$MRG_SIZE" "$SIM_WEIGHT" "${MODEL_NAMES[@]}" )
+( cd "$COMPARE_PYTHON_DIR" && PYTHONPATH="$REPO_ROOT/python" python3 -m dolphin_comparison.compare_reeb_graph "$NUM_PTS" "$MU_COEFF" "$MRG_SIZE" "$SIM_WEIGHT" "${MODEL_NAMES[@]}" )
 
 JAVA_LOG=$(ls "$COMPARE_JAVA_DIR"/log_*)
 PYTHON_LOG=$(ls "$COMPARE_PYTHON_DIR"/log_*)
