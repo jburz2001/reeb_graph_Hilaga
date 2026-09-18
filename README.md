@@ -110,13 +110,20 @@ It also includes `run_original_cad_model_tests()`, which replicates the
 original Java repository's own documented test (build an MRG for every
 sample model, then compute every pairwise similarity score) against the
 real CAD models shipped in this repo's [`models/`](models/) directory,
-printing the result as an NxN similarity matrix -- see that function's
-docstring for full provenance of both the test and the models.
-`plot_similarity_matrix()` then displays that matrix as a `plt.imshow()`
-heatmap (and saves it to `similarity_matrix.png`).
+at the exact parameters from that original README's own example
+invocation (`4000 0.0005 128 0.5`), printing the result as an NxN
+similarity matrix -- see that function's docstring for full provenance
+of both the test and the models, and an important note on why the
+scores won't exactly match the original README's specific historical
+numbers (genuine run-to-run randomness inherited from the original Java
+code -- confirmed present in an unmodified Java build too, not a porting
+bug). `plot_similarity_matrix()` then displays that matrix as a
+`plt.imshow()` heatmap (and saves it to `similarity_matrix.png`).
 
 Run it directly to see both demos end to end (the CAD model test takes
-about a minute, since `dolphin_comparison` is pure Python):
+several minutes at these parameters, since `dolphin_comparison` is pure
+Python; pass a smaller `num_pts`/`mrg_size` to `run_original_cad_model_tests()`
+for a much faster, less faithful, sanity check instead):
 
 ```bash
 $ python3 dolphin_quickstart_example.py
@@ -126,7 +133,7 @@ Similarity(one bump, noisy one bump) = 0.9957  (same topology -> expect close to
 Similarity(one bump, two bumps)      = 0.8843  (different topology -> expect lower)
 
 === Demo 2: run_original_cad_model_tests() on the shipped CAD models ===
-Building MRGs for 16 CAD models from .../models (num_pts=500, mu_coeff=0.0005, mrg_size=32) ...
+Building MRGs for 16 CAD models from .../models (num_pts=4000, mu_coeff=0.0005, mrg_size=128) ...
 ...
 Computing pairwise similarity matrix (original repo's CompareReebGraph algorithm)...
 

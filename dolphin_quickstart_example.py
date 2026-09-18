@@ -13,15 +13,19 @@ Two demos are included:
    nothing beyond this file, numpy, and ``dolphin_comparison``.
 
 2. ``run_original_cad_model_tests()``: replicates the test the original
-   Java repository documents in its own README -- build an MRG for each
-   sample CAD model, then compute the full NxN pairwise similarity
-   matrix -- against the 16 real CAD models shipped in this repository's
-   ``models/`` directory. ``plot_similarity_matrix()`` displays that
-   matrix as a heatmap with ``plt.imshow()``. See
+   Java repository documents in its own README, at the exact parameters
+   from its own example invocation (``4000 0.0005 128 0.5``) -- build an
+   MRG for each sample CAD model, then compute the full NxN pairwise
+   similarity matrix -- against the 16 real CAD models shipped in this
+   repository's ``models/`` directory. ``plot_similarity_matrix()``
+   displays that matrix as a heatmap with ``plt.imshow()``. See
    ``run_original_cad_model_tests()``'s docstring for the full
-   provenance of both the test and the models. Needs this repository's
-   ``models/`` directory in addition to the above (not just this one
-   file).
+   provenance of both the test and the models, and an important note on
+   why the printed scores won't exactly match the specific historical
+   numbers quoted in the original README (inherited, genuine run-to-run
+   randomness -- confirmed present in the original Java code too, not a
+   porting bug). Needs this repository's ``models/`` directory in
+   addition to the above (not just this one file).
 
 Requires:
   - numpy, matplotlib
@@ -152,7 +156,7 @@ def compare_scalar_fields(field_a, field_b, mrg_size=8, sim_weight=0.5):
 
 
 def run_original_cad_model_tests(
-    num_pts=500, mu_coeff=0.0005, mrg_size=32, sim_weight=0.5, models_dir=MODELS_DIR
+    num_pts=4000, mu_coeff=0.0005, mrg_size=128, sim_weight=0.5, models_dir=MODELS_DIR
 ):
     """Replicate the original repository's own test on real CAD models.
 
@@ -180,12 +184,32 @@ def run_original_cad_model_tests(
         Dmitriy Bespalov, Cheuk Yiu Ip, William C. Regli, Joshua
         Shaffer. "Benchmarking search techniques for CAD." ACM SPM, 2005.
 
-    num_pts/mu_coeff/mrg_size/sim_weight default to a smaller num_pts
-    than the original README's own example invocation
-    (``4000 0.0005 128 0.5``) so this finishes in about a minute --
-    dolphin_comparison is pure Python, unlike the original Java. Pass
-    num_pts=4000, mrg_size=128 for a byte-for-byte faithful (but much
-    slower) reproduction of that exact invocation.
+    num_pts/mu_coeff/mrg_size/sim_weight default to the exact values used
+    in the original README's own example invocation
+    (``4000 0.0005 128 0.5``) so this is a faithful replication of that
+    test, not an abbreviated one -- expect several minutes for all 16
+    models, since dolphin_comparison is pure Python and this mrg_size
+    builds a much deeper MRG pyramid than a quick smoke test would need.
+    Pass a smaller num_pts/mrg_size (e.g. 500/32) for a much faster, but
+    less faithful, sanity check.
+
+    IMPORTANT -- even at these exact parameters, do not expect the
+    printed scores to exactly match the specific historical numbers
+    quoted in the original README (e.g. "Similarity between
+    models/goodpart_2.wrl and models/fork_3.wrl is 0.7661396393161327").
+    ``SparseMatrix.makeRandom`` shuffles each model's triangle list with
+    an unseeded ``Math.random()``/``random.random()`` call before mesh
+    resampling, so the resulting MRG (and every score derived from it)
+    varies from run to run -- in the *original, unmodified Java code
+    too*. Running the original Java `ExtractReebGraph`+`CompareReebGraph`
+    twice in a row at these exact parameters was directly verified to
+    give two different sets of scores, both in the same ballpark as the
+    README's historical numbers but not identical to them or to each
+    other (e.g. goodpart_2/fork_3 landed at 0.7655 and 0.7642 across the
+    two runs, vs. the README's 0.7661). CompareReebGraph's matching
+    algorithm itself has no randomness and is exactly reproduced here
+    (see scripts/validate_parity.sh); the "test" being replicated is the
+    methodology, not a specific set of numbers.
 
     Prints the full NxN similarity matrix (see print_similarity_matrix())
     instead of one line per pair, and returns (names, matrix): `names` is
@@ -293,6 +317,7 @@ def main():
 
     print()
     print("=== Demo 2: run_original_cad_model_tests() on the shipped CAD models ===")
+    print("(exact original README parameters: 4000 0.0005 128 0.5 -- this takes several minutes)")
     names, matrix = run_original_cad_model_tests()
     plot_similarity_matrix(names, matrix)
 
