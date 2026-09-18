@@ -117,7 +117,9 @@ of both the test and the models, and an important note on why the
 scores won't exactly match the original README's specific historical
 numbers (genuine run-to-run randomness inherited from the original Java
 code -- confirmed present in an unmodified Java build too, not a porting
-bug). `plot_similarity_matrix()` then displays that matrix as a
+bug). `print_top_k_matches()` then replicates the original repository's
+"Retrieval Results" section -- ranking each model's most similar matches
+-- and `plot_similarity_matrix()` displays the full matrix as a
 `plt.imshow()` heatmap (and saves it to `similarity_matrix.png`).
 
 Run it directly to see both demos end to end (the CAD model test takes

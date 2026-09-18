@@ -17,8 +17,10 @@ Two demos are included:
    from its own example invocation (``4000 0.0005 128 0.5``) -- build an
    MRG for each sample CAD model, then compute the full NxN pairwise
    similarity matrix -- against the 16 real CAD models shipped in this
-   repository's ``models/`` directory. ``plot_similarity_matrix()``
-   displays that matrix as a heatmap with ``plt.imshow()``. See
+   repository's ``models/`` directory. ``print_top_k_matches()`` then
+   replicates the original repository's "Retrieval Results" section
+   (ranking each model's most similar matches); ``plot_similarity_matrix()``
+   displays the full matrix as a heatmap with ``plt.imshow()``. See
    ``run_original_cad_model_tests()``'s docstring for the full
    provenance of both the test and the models, and an important note on
    why the printed scores won't exactly match the specific historical
@@ -275,6 +277,26 @@ def print_similarity_matrix(names, matrix):
         print(f"[{i:2d}] {row}")
 
 
+def print_top_k_matches(names, matrix, k=5):
+    """Print each model's top-k most similar matches, replicating the
+    original Java repository's "Retrieval Results" section
+    (https://github.com/dbespalov/reeb_graph#retrieval-results, mirrored
+    in this project's top-level README.md): "Pairwise similarity values
+    can be used to rank 3D models in terms of their relevance to a query
+    model", illustrated there with a figure of the five top-ranked
+    models for a few query models (`figs/sample_matches.pdf`). This
+    reproduces that ranking as text, for every model, from the
+    similarity matrix computed by run_original_cad_model_tests() --
+    each model excludes itself from its own ranking.
+    """
+    print(f"\nTop-{k} matches per model (original repo's 'Retrieval Results'):")
+    n = len(names)
+    for i, name in enumerate(names):
+        ranked = sorted((j for j in range(n) if j != i), key=lambda j: matrix[i, j], reverse=True)
+        matches = ", ".join(f"{names[j]} ({matrix[i, j]:.3f})" for j in ranked[:k])
+        print(f"  {name}: {matches}")
+
+
 def plot_similarity_matrix(names, matrix, output_path="similarity_matrix.png"):
     """Display the NxN similarity matrix as a heatmap with plt.imshow()."""
     fig, ax = plt.subplots(figsize=(8, 7))
@@ -319,6 +341,7 @@ def main():
     print("=== Demo 2: run_original_cad_model_tests() on the shipped CAD models ===")
     print("(exact original README parameters: 4000 0.0005 128 0.5 -- this takes several minutes)")
     names, matrix = run_original_cad_model_tests()
+    print_top_k_matches(names, matrix)
     plot_similarity_matrix(names, matrix)
 
 
