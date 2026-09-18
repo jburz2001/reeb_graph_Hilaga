@@ -95,15 +95,15 @@ No build step, no third-party dependencies -- just Python 3.
 
 [`quickstart_example.py`](quickstart_example.py) is a minimal, standalone
 module: its `compare_scalar_fields(field_a, field_b)` function takes two
-2D scalar fields (a list of lists, a numpy array, ...) and returns an MRG
-similarity score, with no CAD model files or VTK required. Only needs
-`python/dolphin_comparison/` on `PYTHONPATH` (already the case if you
-keep it next to this file):
+2D numpy arrays and returns an MRG similarity score, with no CAD model
+files or VTK required. Needs `numpy` plus `python/dolphin_comparison/`
+on `PYTHONPATH` (already the case if you keep it next to this file):
 
 ```python
+import numpy as np
 from quickstart_example import compare_scalar_fields
 
-similarity = compare_scalar_fields(field_a, field_b)
+similarity = compare_scalar_fields(field_a, field_b)  # field_a, field_b: 2D numpy arrays
 ```
 
 Run it directly to see it on a couple of small built-in synthetic examples:
