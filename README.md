@@ -94,10 +94,19 @@ No build step, no third-party dependencies -- just Python 3.
 #### Quickstart
 
 [`quickstart_example.py`](quickstart_example.py) is a minimal, standalone
-demo: it builds two small synthetic triangle meshes with scalar fields
-in pure Python (no CAD model files, no VTK), converts each to an MRG, and
-prints a similarity score. Only needs `python/dolphin_comparison/` on
-`PYTHONPATH` (already the case if you keep it next to this file):
+module: its `compare_scalar_fields(field_a, field_b)` function takes two
+2D scalar fields (a list of lists, a numpy array, ...) and returns an MRG
+similarity score, with no CAD model files or VTK required. Only needs
+`python/dolphin_comparison/` on `PYTHONPATH` (already the case if you
+keep it next to this file):
+
+```python
+from quickstart_example import compare_scalar_fields
+
+similarity = compare_scalar_fields(field_a, field_b)
+```
+
+Run it directly to see it on a couple of small built-in synthetic examples:
 
 ```bash
 $ python3 quickstart_example.py

@@ -3,9 +3,12 @@
 Reeb graph (MRG) pipeline in ``python/dolphin_comparison`` -- the Python
 port of the original Java code at https://github.com/dbespalov/reeb_graph.
 
-Builds two small synthetic triangle meshes (a flat grid with a scalar
-value at each vertex, no CAD model files or VTK required), converts each
-into an MRG, and prints a topological similarity score between them.
+The main entry point is ``compare_scalar_fields(field_a, field_b)``: pass
+it two 2D scalar fields (any rows x cols indexable of numbers -- a list
+of lists, a numpy array, ...) and get back a similarity score. Each
+field is treated as a height map on a flat triangulated grid (no CAD
+model files or VTK required); internally it's converted to a mesh,
+turned into an MRG, and compared with the original matching algorithm.
 
 Only requires:
   - the Python standard library
@@ -15,6 +18,10 @@ Only requires:
     (or keep it on ``PYTHONPATH``).
 
 Usage:
+    from quickstart_example import compare_scalar_fields
+    similarity = compare_scalar_fields(field_a, field_b)
+
+Or, to see it run on a couple of small built-in synthetic examples:
     python3 quickstart_example.py
 """
 
@@ -101,6 +108,28 @@ def compare_meshes(mesh_a, mesh_b, mrg_size=8, sim_weight=0.5):
         return comparer.SIM_R_S
 
 
+def compare_scalar_fields(field_a, field_b, mrg_size=8, sim_weight=0.5):
+    """Compare two 2D scalar fields and return their MRG similarity score
+    (1.0 = topologically identical, lower = less similar).
+
+    field_a, field_b: rows x cols indexables of numbers (e.g. a list of
+    lists, or a numpy array) -- both must have the same shape. Each field
+    is treated as a height map on a flat triangulated grid.
+
+    mrg_size: number of ranges in the finest MRG resolution (parameter K
+    in Hilaga et al.); sim_weight: trade-off in [0, 1] between the area
+    attribute `a` and the length attribute `l` in the similarity function.
+    """
+    if len(field_a) != len(field_b) or len(field_a[0]) != len(field_b[0]):
+        raise ValueError("field_a and field_b must have the same shape")
+
+    def mesh_from_field(field):
+        rows, cols = len(field), len(field[0])
+        return make_grid_mesh(rows, cols, lambda r, c: float(field[r][c]))
+
+    return compare_meshes(mesh_from_field(field_a), mesh_from_field(field_b), mrg_size, sim_weight)
+
+
 def main():
     random.seed(0)
     rows = cols = 16
@@ -117,15 +146,12 @@ def main():
         x2, y2 = c - 3 * cols / 4, r - 3 * rows / 4
         return math.exp(-(x1 * x1 + y1 * y1) / 15.0) + math.exp(-(x2 * x2 + y2 * y2) / 15.0)
 
-    # Each mesh is rebuilt fresh right before use: build_mrg_file() mutates
-    # its point/triangle/mu-value lists in place while constructing the
-    # MRG, so the same mesh object must never be fed into it twice.
-    sim_same_shape = compare_meshes(
-        make_grid_mesh(rows, cols, bump), make_grid_mesh(rows, cols, noisy_bump)
-    )
-    sim_different_shape = compare_meshes(
-        make_grid_mesh(rows, cols, bump), make_grid_mesh(rows, cols, two_bumps)
-    )
+    field_bump = [[bump(r, c) for c in range(cols)] for r in range(rows)]
+    field_noisy_bump = [[noisy_bump(r, c) for c in range(cols)] for r in range(rows)]
+    field_two_bumps = [[two_bumps(r, c) for c in range(cols)] for r in range(rows)]
+
+    sim_same_shape = compare_scalar_fields(field_bump, field_noisy_bump)
+    sim_different_shape = compare_scalar_fields(field_bump, field_two_bumps)
 
     print()
     print(f"Similarity(one bump, noisy one bump) = {sim_same_shape:.4f}  (same topology -> expect close to 1.0)")
