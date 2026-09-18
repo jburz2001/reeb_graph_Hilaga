@@ -93,7 +93,7 @@ No build step, no third-party dependencies -- just Python 3.
 
 #### Quickstart
 
-[`quickstart_example.py`](quickstart_example.py) is a minimal, standalone
+[`dolphin_quickstart_example.py`](dolphin_quickstart_example.py) is a minimal, standalone
 module: its `compare_scalar_fields(field_a, field_b)` function takes two
 2D numpy arrays and returns an MRG similarity score, with no CAD model
 files or VTK required. Needs `numpy` plus `python/dolphin_comparison/`
@@ -101,18 +101,35 @@ on `PYTHONPATH` (already the case if you keep it next to this file):
 
 ```python
 import numpy as np
-from quickstart_example import compare_scalar_fields
+from dolphin_quickstart_example import compare_scalar_fields
 
 similarity = compare_scalar_fields(field_a, field_b)  # field_a, field_b: 2D numpy arrays
 ```
 
-Run it directly to see it on a couple of small built-in synthetic examples:
+It also includes `run_original_cad_model_tests()`, which replicates the
+original Java repository's own documented test (build an MRG for every
+sample model, then print every pairwise similarity score) against the
+real CAD models shipped in this repo's [`models/`](models/) directory --
+see that function's docstring for full provenance of both the test and
+the models.
+
+Run it directly to see both demos end to end (the CAD model test takes
+about a minute, since `dolphin_comparison` is pure Python):
 
 ```bash
-$ python3 quickstart_example.py
+$ python3 dolphin_quickstart_example.py
 
+=== Demo 1: compare_scalar_fields() on synthetic scalar fields ===
 Similarity(one bump, noisy one bump) = 0.9957  (same topology -> expect close to 1.0)
 Similarity(one bump, two bumps)      = 0.8843  (different topology -> expect lower)
+
+=== Demo 2: run_original_cad_model_tests() on the shipped CAD models ===
+Building MRGs for 16 CAD models from .../models (num_pts=500, mu_coeff=0.0005, mrg_size=32) ...
+...
+Pairwise similarity scores (original repo's CompareReebGraph algorithm):
+  Similarity between bracket_1.wrl and bracket_1.wrl is 1.0
+  Similarity between bracket_1.wrl and bracket_2.wrl is 0.869...
+  ...
 ```
 
 #### MRG Construction
