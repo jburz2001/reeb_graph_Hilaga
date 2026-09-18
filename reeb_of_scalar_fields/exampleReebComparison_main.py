@@ -20,6 +20,8 @@ from vtkmodules.vtkFiltersCore import vtkThreshold
 import networkx as nx
 from networkx.algorithms.graph_hashing import weisfeiler_lehman_graph_hash
 
+from skimage.transform import pyramid_gaussian, pyramid_laplacian, resize
+
 from exampleReebComparison_miscellaneous import *
 
 FPO_Path = Path(__file__).parent.parent / "inputs" / "fundamental_periodic_orbits.h5"
@@ -775,7 +777,150 @@ def get_nx_graph_and_reeb_outputs(field, domain_mode, eps, persistence_threshold
     return graph, outputs
 
 
+# def blend_boundaries(image, percent=5):
+#     def pyramid_blend(a, b, mask):
+#         levels = max(1, int(np.log2(min(a.shape))) - 2)
+#         la = list(pyramid_laplacian(a, max_layer=levels, downscale=2, channel_axis=None))
+#         lb = list(pyramid_laplacian(b, max_layer=levels, downscale=2, channel_axis=None))
+#         gm = list(pyramid_gaussian(mask, max_layer=levels, downscale=2, channel_axis=None))
+#         blended = [la_i * gm_i + lb_i * (1 - gm_i) for la_i, lb_i, gm_i in zip(la, lb, gm)]
+#         out = blended[-1]
+#         for layer in blended[-2::-1]:
+#             out = resize(out, layer.shape, mode='reflect', anti_aliasing=False) + layer
+#         return out
 
+#     img = image.astype(float)
+#     H, W = img.shape
+#     wh = max(2, int(round(H * percent / 100)))
+#     ww = max(2, int(round(W * percent / 100)))
+#     result = img.copy()
+
+#     mask_lr = np.tile(np.linspace(0, 1, ww), (H, 1))
+#     mask_tb = np.tile(np.linspace(0, 1, wh), (W, 1)).T
+#     mask_corner = (np.linspace(0, 1, wh)[:, None] + np.linspace(0, 1, ww)[None, :]) / 2
+
+#     left, right = img[:, :ww], img[:, -ww:]
+#     blended_lr = pyramid_blend(left, right, mask_lr)
+#     result[:, :ww] = blended_lr
+#     result[:, -ww:] = blended_lr
+
+#     top, bottom = img[:wh, :], img[-wh:, :]
+#     blended_tb = pyramid_blend(top, bottom, mask_tb)
+#     result[:wh, :] = blended_tb
+#     result[-wh:, :] = blended_tb
+
+#     tl, br = img[:wh, :ww], img[-wh:, -ww:]
+#     blended_tlbr = pyramid_blend(tl, br, mask_corner)
+#     result[:wh, :ww] = blended_tlbr
+#     result[-wh:, -ww:] = blended_tlbr
+
+#     tr, bl = img[:wh, -ww:], img[-wh:, :ww]
+#     blended_trbl = pyramid_blend(tr, bl, mask_corner)
+#     result[:wh, -ww:] = blended_trbl
+#     result[-wh:, :ww] = blended_trbl
+
+#     row_idx = np.arange(H)[:, None]
+#     col_idx = np.arange(W)[None, :]
+#     dist_top = row_idx / wh
+#     dist_bottom = (H - 1 - row_idx) / wh
+#     dist_left = col_idx / ww
+#     dist_right = (W - 1 - col_idx) / ww
+#     dist = np.minimum(np.minimum(dist_top, dist_bottom), np.minimum(dist_left, dist_right))
+#     edge_mask = np.clip(1 - dist, 0, 1)
+
+#     final = pyramid_blend(result, img, edge_mask)
+#     return final
+
+
+import numpy as np
+from skimage.transform import pyramid_laplacian, pyramid_gaussian, pyramid_expand, resize
+
+
+def blend_boundaries(image, percent=5):
+    def collapse(levels):
+        """Reconstruct from a Laplacian-pyramid-style list of levels using
+        pyramid_expand (matched filter to pyramid_laplacian/pyramid_gaussian's
+        reduce step), instead of a generic resize(). Generic resize with
+        anti_aliasing=False uses a mismatched filter and introduces aliasing
+        (visible as fine striping) on reconstruction."""
+        out = levels[-1]
+        for layer in levels[-2::-1]:
+            out = pyramid_expand(out, upscale=2, channel_axis=None)
+            if out.shape != layer.shape:
+                # Rare off-by-one from non-power-of-two sizes; correct with
+                # anti-aliasing ON (this is a fallback, not the main path).
+                out = resize(out, layer.shape, mode='reflect', anti_aliasing=True)
+            out = out + layer
+        return out
+
+    def pyramid_blend(a, b, mask):
+        levels = max(1, int(np.log2(min(a.shape))) - 2)
+        la = list(pyramid_laplacian(a, max_layer=levels, downscale=2, channel_axis=None))
+        lb = list(pyramid_laplacian(b, max_layer=levels, downscale=2, channel_axis=None))
+        gm = list(pyramid_gaussian(mask, max_layer=levels, downscale=2, channel_axis=None))
+        blended = [la_i * gm_i + lb_i * (1 - gm_i) for la_i, lb_i, gm_i in zip(la, lb, gm)]
+        return collapse(blended)
+
+    img = image.astype(float)
+    H, W = img.shape
+    wh = max(2, int(round(H * percent / 100)))
+    ww = max(2, int(round(W * percent / 100)))
+    result = img.copy()
+
+    # ---- Left/Right seam ----------------------------------------------
+    # strip[:, 0] ~ "left flavor", strip[:, -1] ~ "right flavor": a smooth
+    # cross-fade of the two edge strips (multi-band, so texture/frequency
+    # content blends, not just color).
+    left, right = img[:, :ww], img[:, -ww:]
+    mask_lr = np.tile(np.linspace(0, 1, ww), (H, 1))
+    strip_lr = pyramid_blend(right, left, mask_lr)  # a=right,b=left -> mask0=>left, mask1=>right
+
+    half_w = ww // 2
+    # First half (left-flavored) goes to the TAIL of the right edge.
+    # Second half (right-flavored) goes to the HEAD of the left edge.
+    # Reading across the wrap (col W-1 -> col 0) then walks CONSECUTIVE
+    # indices of the same strip -> continuous, instead of duplicating the
+    # same patch on both sides (which is what produced the visible seam).
+    result[:, W - half_w:W] = strip_lr[:, :half_w]
+    result[:, 0:ww - half_w] = strip_lr[:, half_w:]
+
+    # ---- Top/Bottom seam ------------------------------------------------
+    top, bottom = img[:wh, :], img[-wh:, :]
+    mask_tb = np.tile(np.linspace(0, 1, wh), (W, 1)).T
+    strip_tb = pyramid_blend(bottom, top, mask_tb)  # mask0=>top, mask1=>bottom
+
+    half_h = wh // 2
+    result[H - half_h:H, :] = strip_tb[:half_h, :]
+    result[0:wh - half_h, :] = strip_tb[half_h:, :]
+
+    # ---- Corners ----------------------------------------------------------
+    # Approximate as two diagonal pairs, each split the same way as above
+    # but in 2D (quadrant split instead of half split).
+    tl, br = img[:wh, :ww], img[-wh:, -ww:]
+    mask_corner = (np.linspace(0, 1, wh)[:, None] + np.linspace(0, 1, ww)[None, :]) / 2
+    strip_tlbr = pyramid_blend(br, tl, mask_corner)  # mask0=>tl, mask1=>br
+
+    result[H - half_h:H, W - half_w:W] = strip_tlbr[:half_h, :half_w]
+    result[0:wh - half_h, 0:ww - half_w] = strip_tlbr[half_h:, half_w:]
+
+    tr, bl = img[:wh, -ww:], img[-wh:, :ww]
+    strip_trbl = pyramid_blend(bl, tr, mask_corner)  # mask0=>tr, mask1=>bl
+
+    result[H - half_h:H, 0:ww - half_w] = strip_trbl[:half_h, half_w:]
+    result[0:wh - half_h, W - half_w:W] = strip_trbl[half_h:, :half_w]
+
+    # ---- Smooth transition between the touched border ring and interior --
+    row_idx = np.arange(H)[:, None]
+    col_idx = np.arange(W)[None, :]
+    dist_top = row_idx / wh
+    dist_bottom = (H - 1 - row_idx) / wh
+    dist_left = col_idx / ww
+    dist_right = (W - 1 - col_idx) / ww
+    dist = np.minimum(np.minimum(dist_top, dist_bottom), np.minimum(dist_left, dist_right))
+    edge_mask = np.clip(1 - dist, 0, 1)
+
+    final = pyramid_blend(result, img, edge_mask)
+    return final
 
 def run(
     arc_sampling: int = 20,
@@ -793,7 +938,7 @@ def run(
     # 1
     print("Loading orbit from Orbithunter to Numpy array")
     # FPO_Path = Path(__file__).parent.parent / "inputs" / "fundamental_periodic_orbits.h5"
-    FPO_Path = Path(__file__).parent.parent / "inputs" / "pitchfork_10_iterations.h5"
+    FPO_Path = Path(__file__).parent / "pitchfork_10_iterations.h5"
     orbits = orb.io.read_h5(str(FPO_Path))
     orbit = orbits[orbit_index]
     field_orbit = orbit.resize(512, 512).transform(to="field")
@@ -837,56 +982,62 @@ def run(
     else:
         domain_mode = DOMAIN_OPEN
 
+
     eps = 0
 
-    persistence_threshold = 0.01 * np.ptp(field)
-    FPO_Path = Path(__file__).parent.parent / "inputs" / "fundamental_periodic_orbits.h5"
-    orbits = orb.io.read_h5(str(FPO_Path))
-    orbit = orbits[orbit_index]
-    field_orbit = orbit.resize(512, 512).transform(to="field")
-    field_sherwood = np.asarray(field_orbit.state, dtype=np.float64)
-    graph_sherwood, outputs_sherwood = get_nx_graph_and_reeb_outputs(field_sherwood, domain_mode, eps, persistence_threshold, arc_sampling, with_segmentation)
-
-    persistence_threshold = 0.01 * np.ptp(field)
-    FPO_Path = Path(__file__).parent.parent / "inputs" / "fundamental_periodic_orbits.h5"
-    orbits = orb.io.read_h5(str(FPO_Path))
-    orbit = orbits[orbit_index]
-    field_orbit = orbit.resize(512, 512).transform(to="field")
-    field_sherwood = np.asarray(field_orbit.state, dtype=np.float64)
-    field_sherwoodRolled = np.roll(field_sherwood, shift=(roll_t, roll_x), axis=(0, 1))
-    graph_sherwoodRolled, outputs_sherwoodRolled = get_nx_graph_and_reeb_outputs(field_sherwoodRolled, domain_mode, eps, persistence_threshold, arc_sampling, with_segmentation)
-
-    # persistence_threshold = 0.1 * np.ptp(field)
-    # FPO_Path = Path(__file__).parent.parent / "inputs" / "pitchfork_10_iterations.h5"
+    # persistence_threshold = 0.01 * np.ptp(field)
+    # FPO_Path = Path(__file__).parent.parent / "inputs" / "fundamental_periodic_orbits.h5"
     # orbits = orb.io.read_h5(str(FPO_Path))
     # orbit = orbits[orbit_index]
     # field_orbit = orbit.resize(512, 512).transform(to="field")
-    # field_clipped10 = np.asarray(field_orbit.state, dtype=np.float64)
-    # graph_clipped10, outputs_clipped10 = get_nx_graph_and_reeb_outputs(field_clipped10, domain_mode, eps, persistence_threshold, arc_sampling, with_segmentation)
+    # field_sherwood = np.asarray(field_orbit.state, dtype=np.float64)
+    # graph_sherwood, outputs_sherwood = get_nx_graph_and_reeb_outputs(field_sherwood, domain_mode, eps, persistence_threshold, arc_sampling, with_segmentation)
 
-    field_a, field_b = field_sherwood, field_sherwoodRolled
-    graph_a, graph_b = graph_sherwood, graph_sherwoodRolled
+    # persistence_threshold = 0.01 * np.ptp(field)
+    # FPO_Path = Path(__file__).parent.parent / "inputs" / "fundamental_periodic_orbits.h5"
+    # orbits = orb.io.read_h5(str(FPO_Path))
+    # orbit = orbits[orbit_index]
+    # field_orbit = orbit.resize(512, 512).transform(to="field")
+    # field_sherwood = np.asarray(field_orbit.state, dtype=np.float64)
+    # field_sherwoodRolled = np.roll(field_sherwood, shift=(roll_t, roll_x), axis=(0, 1))
+    # graph_sherwoodRolled, outputs_sherwoodRolled = get_nx_graph_and_reeb_outputs(field_sherwoodRolled, domain_mode, eps, persistence_threshold, arc_sampling, with_segmentation)
 
-    isomorphic, original_hash, rolled_hash, original_skeleton, rolled_skeleton = compare_networkx_graphs(graph_a, graph_b)
-    print(f"WL hashes equal:  {isomorphic}")
+    persistence_threshold = 0.1 * np.ptp(field)
+    FPO_Path = Path(__file__).parent / "pitchfork_10_iterations.h5"
+    orbits = orb.io.read_h5(str(FPO_Path))
+    orbit = orbits[orbit_index]
+    field_orbit = orbit.resize(512, 512).transform(to="field")
+    field_clipped10 = np.asarray(field_orbit.state, dtype=np.float64)
+    graph_clipped10, outputs_clipped10 = get_nx_graph_and_reeb_outputs(field_clipped10, domain_mode, eps, persistence_threshold, arc_sampling, with_segmentation)
 
-    physical_plot_path = OUTPUT_DIR / "physical_reeb_comparison_orbit_0.png"
-    plot_physical_reeb_comparison(
-        field_a,
-        field_b,
-        original_skeleton,
-        rolled_skeleton,
-        isomorphic=isomorphic,
-        save_path=physical_plot_path,
-    )
+    plt.imsave(Path(__file__).parent / "unblended.png", field_clipped10, cmap='RdBu_r')
 
-    graph_plot_path = OUTPUT_DIR / "reeb_skeleton_isomorphism_orbit_0.png"
-    plot_reeb_graph_isomorphism_comparison(
-        original_skeleton,
-        rolled_skeleton,
-        isomorphic=isomorphic,
-        save_path=graph_plot_path,
-    )
+    field_clipped10_blended = blend_boundaries(field_clipped10, percent=5)
+    plt.imsave(Path(__file__).parent / "blended.png", field_clipped10_blended, cmap='RdBu_r')
+
+    # field_a, field_b = field_sherwood, field_sherwoodRolled
+    # graph_a, graph_b = graph_sherwood, graph_sherwoodRolled
+
+    # isomorphic, original_hash, rolled_hash, original_skeleton, rolled_skeleton = compare_networkx_graphs(graph_a, graph_b)
+    # print(f"WL hashes equal:  {isomorphic}")
+
+    # physical_plot_path = OUTPUT_DIR / "physical_reeb_comparison_orbit_0.png"
+    # plot_physical_reeb_comparison(
+    #     field_a,
+    #     field_b,
+    #     original_skeleton,
+    #     rolled_skeleton,
+    #     isomorphic=isomorphic,
+    #     save_path=physical_plot_path,
+    # )
+
+    # graph_plot_path = OUTPUT_DIR / "reeb_skeleton_isomorphism_orbit_0.png"
+    # plot_reeb_graph_isomorphism_comparison(
+    #     original_skeleton,
+    #     rolled_skeleton,
+    #     isomorphic=isomorphic,
+    #     save_path=graph_plot_path,
+    # )
 
     
 
