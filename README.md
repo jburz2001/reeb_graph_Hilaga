@@ -108,10 +108,10 @@ similarity = compare_scalar_fields(field_a, field_b)  # field_a, field_b: 2D num
 
 It also includes `run_original_cad_model_tests()`, which replicates the
 original Java repository's own documented test (build an MRG for every
-sample model, then print every pairwise similarity score) against the
-real CAD models shipped in this repo's [`models/`](models/) directory --
-see that function's docstring for full provenance of both the test and
-the models.
+sample model, then compute every pairwise similarity score) against the
+real CAD models shipped in this repo's [`models/`](models/) directory,
+printing the result as an NxN similarity matrix -- see that function's
+docstring for full provenance of both the test and the models.
 
 Run it directly to see both demos end to end (the CAD model test takes
 about a minute, since `dolphin_comparison` is pure Python):
@@ -126,9 +126,16 @@ Similarity(one bump, two bumps)      = 0.8843  (different topology -> expect low
 === Demo 2: run_original_cad_model_tests() on the shipped CAD models ===
 Building MRGs for 16 CAD models from .../models (num_pts=500, mu_coeff=0.0005, mrg_size=32) ...
 ...
-Pairwise similarity scores (original repo's CompareReebGraph algorithm):
-  Similarity between bracket_1.wrl and bracket_1.wrl is 1.0
-  Similarity between bracket_1.wrl and bracket_2.wrl is 0.869...
+Computing pairwise similarity matrix (original repo's CompareReebGraph algorithm)...
+
+Model index legend:
+  [ 0] bracket_1.wrl
+  [ 1] bracket_2.wrl
+  ...
+
+            0      1      2      3 ...
+[ 0]   1.000  0.804  0.785  0.821 ...
+[ 1]   0.804  1.000  0.895  0.856 ...
   ...
 ```
 

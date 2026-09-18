@@ -14,11 +14,12 @@ Two demos are included:
 
 2. ``run_original_cad_model_tests()``: replicates the test the original
    Java repository documents in its own README -- build an MRG for each
-   sample CAD model and print every pairwise similarity score -- against
-   the 16 real CAD models shipped in this repository's ``models/``
-   directory. See that function's docstring for the full provenance of
-   both the test and the models. Needs this repository's ``models/``
-   directory in addition to the above (not just this one file).
+   sample CAD model, then print the full NxN pairwise similarity matrix
+   -- against the 16 real CAD models shipped in this repository's
+   ``models/`` directory. See that function's docstring for the full
+   provenance of both the test and the models. Needs this repository's
+   ``models/`` directory in addition to the above (not just this one
+   file).
 
 Requires:
   - numpy
@@ -52,7 +53,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "python"))
 from dolphin_comparison.attribute_calculation import AttributeCalculation
 from dolphin_comparison.compare_reeb_graph import CompareReebGraph
 from dolphin_comparison.extract_reeb_graph import calculate_whole_area, main_one as extract_reeb_graph_one
-from dolphin_comparison.java_fmt import java_double_str
 from dolphin_comparison.mrg_constr_light import MRGConstrLight
 from dolphin_comparison.mrg_io import save_mrg
 from dolphin_comparison.mu_normalization import MuNormalization
@@ -184,7 +184,11 @@ def run_original_cad_model_tests(
     num_pts=4000, mrg_size=128 for a byte-for-byte faithful (but much
     slower) reproduction of that exact invocation.
 
-    Returns a dict of {(model_a_name, model_b_name): similarity}.
+    Prints the full NxN similarity matrix (see print_similarity_matrix())
+    instead of one line per pair, and returns (names, matrix): `names` is
+    the list of model filenames in matrix row/column order, and `matrix`
+    is an NxN numpy array with matrix[i, j] = similarity between
+    names[i] and names[j].
     """
     wrl_paths = sorted(Path(models_dir).glob("*.wrl"))
     if not wrl_paths:
@@ -210,23 +214,38 @@ def run_original_cad_model_tests(
         for path in work_paths:
             extract_reeb_graph_one(str(path), num_pts, mu_coeff, mrg_size)
 
-        print("\nPairwise similarity scores (original repo's CompareReebGraph algorithm):")
+        print("\nComputing pairwise similarity matrix (original repo's CompareReebGraph algorithm)...")
         comparer = CompareReebGraph()
         comparer.w = sim_weight
-        results = {}
-        for path_i in work_paths:
-            for path_j in work_paths:
+        names = [path.name for path in work_paths]
+        matrix = np.empty((len(work_paths), len(work_paths)))
+        for i, path_i in enumerate(work_paths):
+            for j, path_j in enumerate(work_paths):
                 # CompareReebGraph.main_one() also prints "Similarity
                 # between <tmp path> and <tmp path> is: ..." itself
                 # (matching the original Java program's own console
-                # output) -- silenced here in favor of the cleaner,
-                # basename-only summary line below.
+                # output) -- silenced in favor of the matrix printed below.
                 with contextlib.redirect_stdout(io.StringIO()):
                     comparer.main_one(str(path_i), str(path_j))
-                results[(path_i.name, path_j.name)] = comparer.SIM_R_S
-                print(f"  Similarity between {path_i.name} and {path_j.name} is {java_double_str(comparer.SIM_R_S)}")
+                matrix[i, j] = comparer.SIM_R_S
 
-        return results
+        print_similarity_matrix(names, matrix)
+        return names, matrix
+
+
+def print_similarity_matrix(names, matrix):
+    """Print an NxN similarity matrix as an index-legend + aligned table
+    (model names are too long to use as column headers directly)."""
+    print("\nModel index legend:")
+    for i, name in enumerate(names):
+        print(f"  [{i:2d}] {name}")
+
+    print()
+    header = "      " + "".join(f"{i:>7d}" for i in range(len(names)))
+    print(header)
+    for i, name in enumerate(names):
+        row = "".join(f"{value:7.3f}" for value in matrix[i])
+        print(f"[{i:2d}] {row}")
 
 
 def gaussian_bump(rows, cols, center_row, center_col, spread):
