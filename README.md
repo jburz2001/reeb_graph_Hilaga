@@ -91,6 +91,21 @@ Sample Usage
 
 No build step, no third-party dependencies -- just Python 3.
 
+#### Quickstart
+
+[`quickstart_example.py`](quickstart_example.py) is a minimal, standalone
+demo: it builds two small synthetic triangle meshes with scalar fields
+in pure Python (no CAD model files, no VTK), converts each to an MRG, and
+prints a similarity score. Only needs `python/dolphin_comparison/` on
+`PYTHONPATH` (already the case if you keep it next to this file):
+
+```bash
+$ python3 quickstart_example.py
+
+Similarity(one bump, noisy one bump) = 0.9957  (same topology -> expect close to 1.0)
+Similarity(one bump, two bumps)      = 0.8843  (different topology -> expect lower)
+```
+
 #### MRG Construction
 
 3D models must be saved in a specially-formatted VRML files (see [CAD Models](#cad-models))
