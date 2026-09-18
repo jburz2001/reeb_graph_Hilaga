@@ -14,15 +14,17 @@ Two demos are included:
 
 2. ``run_original_cad_model_tests()``: replicates the test the original
    Java repository documents in its own README -- build an MRG for each
-   sample CAD model, then print the full NxN pairwise similarity matrix
-   -- against the 16 real CAD models shipped in this repository's
-   ``models/`` directory. See that function's docstring for the full
+   sample CAD model, then compute the full NxN pairwise similarity
+   matrix -- against the 16 real CAD models shipped in this repository's
+   ``models/`` directory. ``plot_similarity_matrix()`` displays that
+   matrix as a heatmap with ``plt.imshow()``. See
+   ``run_original_cad_model_tests()``'s docstring for the full
    provenance of both the test and the models. Needs this repository's
    ``models/`` directory in addition to the above (not just this one
    file).
 
 Requires:
-  - numpy
+  - numpy, matplotlib
   - the ``dolphin_comparison`` package, which ships in this repository's
     ``python/`` directory right next to this file -- to run this example
     elsewhere, copy ``python/dolphin_comparison/`` alongside this script
@@ -46,6 +48,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "python"))
@@ -248,6 +251,24 @@ def print_similarity_matrix(names, matrix):
         print(f"[{i:2d}] {row}")
 
 
+def plot_similarity_matrix(names, matrix, output_path="similarity_matrix.png"):
+    """Display the NxN similarity matrix as a heatmap with plt.imshow()."""
+    fig, ax = plt.subplots(figsize=(8, 7))
+    im = ax.imshow(matrix, vmin=0.0, vmax=1.0, cmap="viridis")
+    fig.colorbar(im, ax=ax, label="similarity")
+
+    labels = [name.removesuffix(".wrl") for name in names]
+    ax.set_xticks(range(len(labels)), labels, rotation=90)
+    ax.set_yticks(range(len(labels)), labels)
+    ax.set_title("CAD model MRG similarity matrix")
+    fig.tight_layout()
+
+    if output_path is not None:
+        fig.savefig(output_path, dpi=150)
+        print(f"\nSaved similarity matrix heatmap to {output_path}")
+    plt.show()
+
+
 def gaussian_bump(rows, cols, center_row, center_col, spread):
     r, c = np.mgrid[0:rows, 0:cols]
     return np.exp(-((c - center_col) ** 2 + (r - center_row) ** 2) / spread)
@@ -272,7 +293,8 @@ def main():
 
     print()
     print("=== Demo 2: run_original_cad_model_tests() on the shipped CAD models ===")
-    run_original_cad_model_tests()
+    names, matrix = run_original_cad_model_tests()
+    plot_similarity_matrix(names, matrix)
 
 
 if __name__ == "__main__":

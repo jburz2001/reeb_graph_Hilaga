@@ -112,6 +112,8 @@ sample model, then compute every pairwise similarity score) against the
 real CAD models shipped in this repo's [`models/`](models/) directory,
 printing the result as an NxN similarity matrix -- see that function's
 docstring for full provenance of both the test and the models.
+`plot_similarity_matrix()` then displays that matrix as a `plt.imshow()`
+heatmap (and saves it to `similarity_matrix.png`).
 
 Run it directly to see both demos end to end (the CAD model test takes
 about a minute, since `dolphin_comparison` is pure Python):

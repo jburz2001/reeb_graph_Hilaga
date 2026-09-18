@@ -3,3 +3,4 @@
 *.class
 __pycache__/
 *.pyc
+similarity_matrix.png
