@@ -38,15 +38,15 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "python"))
 
-from dolphin_comparison.attribute_calculation import AttributeCalculation
-from dolphin_comparison.compare_reeb_graph import CompareReebGraph
-from dolphin_comparison.extract_reeb_graph import calculate_whole_area
-from dolphin_comparison.mrg_constr_light import MRGConstrLight
-from dolphin_comparison.mrg_io import save_mrg
-from dolphin_comparison.mu_normalization import MuNormalization
-from dolphin_comparison.point import Point
-from dolphin_comparison.sparse_matrix import SparseMatrix
-from dolphin_comparison.triangle import Triangle
+from python.dolphin_comparison.attribute_calculation import AttributeCalculation
+from python.dolphin_comparison.compare_reeb_graph import CompareReebGraph
+from python.dolphin_comparison.extract_reeb_graph import calculate_whole_area
+from python.dolphin_comparison.mrg_constr_light import MRGConstrLight
+from python.dolphin_comparison.mrg_io import save_mrg
+from python.dolphin_comparison.mu_normalization import MuNormalization
+from python.dolphin_comparison.point import Point
+from python.dolphin_comparison.sparse_matrix import SparseMatrix
+from python.dolphin_comparison.triangle import Triangle
 
 
 def make_grid_mesh(rows, cols, value_fn):
